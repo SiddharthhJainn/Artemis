@@ -1,4 +1,4 @@
-// Jets are working. I think the conditions for subjets also work fine.
+// Basic setup for Deeply Inelastic Scattering at HERA.
 
 // Header file to access Pythia 8 program elements.
 #include "Pythia8/Pythia.h"
@@ -21,21 +21,25 @@ using namespace Pythia8;
 
 int main() {
 
-// Beam energies, minimal Q2, number of events to generate.
-  double eProton   = 820.;
-  double eElectron = 27.5;
+// Beam energies, minimal Q2, number of events to generate
 
-  double Q2min     = 125.;
-  int    nEvent    = 100000;
-  
-   double pTMin   = 10.0;                       // Min jet pT
+  double eProton   = 820.;  // proton energy
+  double eElectron = 27.5;  // positron energy
+  double Q2min     = 125.;  // Q2 minimum
+  int    nEvent    = 100000;    // number of events
+  double R = 0.8;           // Jet radius
+
+  //double Rs = 0.4;
+
+  double EtMin = 5.;
+
+  //double pTMin   = 5.;                  // Min jet pT
 
   // Generator.
   Pythia pythia;
   
   // Shorthand for the event record in pythia.
   Event& event = pythia.event;
-
 
   // Set up incoming beams, for frame with unequal beam energies.
   pythia.readString("Beams:frameType = 2");
@@ -49,6 +53,12 @@ int main() {
   // Set up DIS process within some phase space.
   // Neutral current (with gamma/Z interference).
   pythia.readString("WeakBosonExchange:ff2ff(t:gmZ) = on");
+
+  //pythia.readString("PhotonParton:all = on");
+
+  //pythia.readString("PhotonParton:ggm2qqbar = on");
+  //pythia.readString("PhotonParton:ggm2ccbar = on");
+  //pythia.readString("PhotonParton:ggm2bbbar = on");
   
   // Phase-space cut: minimal Q2 of process.
   pythia.settings.parm("PhaseSpace:Q2Min", Q2min);
@@ -68,20 +78,16 @@ int main() {
   pythia.init();
 
   // Set up FastJet jet finder.
-  // Select common parameters for SlowJet and FastJet analyses.
-  int    power   = 1;     // -1 = anti-kT; 0 = C/A; 1 = kT.
-  double R       = 0.6;   //above which two particles are considered as no longer part of the same jet, i.e. no longer considered as collinear.
-  //   one can use either explicitly use antikt, cambridge, etc., or
-  //   just use genkt_algorithm with specification of power
-  //fastjet::JetAlgorithm algorithm;
-  //if (power == -1)      algorithm = fastjet::antikt_algorithm;
-  //if (power ==  0)      algorithm = fastjet::cambridge_algorithm;
-  //if (power ==  1)      algorithm = fastjet::kt_algorithm;
-  //fastjet::JetDefinition jetDef(algorithm, R);
-  // there's no need for a pointer to the jetDef (it's a fairly small object)
-  //fastjet::JetDefinition jetDef(fastjet::genkt_algorithm, R, power);
-  JetDefinition jetDef( kt_algorithm, R);
-  JetDefinition jetDefCA( kt_algorithm, R);
+
+  //JetDefinition jetDef( kt_algorithm, R,E_scheme);
+  //JetDefinition jetDefCA( kt_algorithm, R,E_scheme);
+
+  //fastjet::JetDefinition jetDef(kt_algorithm,E_scheme, Best);
+  //fastjet::JetDefinition jetDefCA(kt_algorithm,E_scheme, Best);
+
+  fastjet::JetDefinition jetDef(fastjet::ee_kt_algorithm);
+  fastjet::JetDefinition jetDefCA(fastjet::ee_kt_algorithm);
+  
   
   //fastjet::JetDefinition jetDef(kt_algorithm,R,E_scheme,Best);          // for jets : kt_algorithm
   
@@ -95,19 +101,20 @@ int main() {
   
  Double_t hpx[500],hpy[500],hpz[500],he[500];
 
- Double_t jpx[50], jpy[50], jpz[50], je[50], jeta[50], jphi[50], jtheta[50], jpt[50], jee[50];
+ Double_t jpx[50], jpy[50], jpz[50], je[50], jeta[50], jphi[50], jtheta[50], jpt[50], jee[50] , dist[50];
 
  //Double_t jjpx[50]; // jjpy[50], jjpz[50], jje[50], jjeta[50], jjphi[50], jjtheta[50], jjpt[50], jjee[50];
 
  Double_t Asj_px[50], Asj_py[50], Asj_pz[50], Asj_e[50], Asj_eta[50], Asj_phi[50], Asj_theta[50], Asj_pt[50];
 
- Double_t epx,epy,epz,ee, ept, etheta , ey;
+ Double_t epx , epy , epz , ee, ept, etheta, ye, eeta, ephi;
 
  Int_t nb, jnum, jjnum, Asj;
 //----------------------------------------------------------------------------------------------
    
   // Set up the ROOT TFile and TTree.
   TFile *file = TFile::Open("009mymain09.root","recreate");
+  double ycut = 0.0005;          // ycut parameter for subjets
   
   TTree *T = new TTree("Tree","ev1 Tree");
   
@@ -117,6 +124,7 @@ int main() {
   T->Branch("ee",&ee);
   T->Branch("ept",&ept);
   T->Branch("etheta",&etheta);
+  T->Branch("ye",&ye);
   
   T->Branch("nb",&nb,"nb/I");
   T->Branch("hpx",hpx,"hpx[nb]/D");
@@ -134,8 +142,9 @@ int main() {
   T->Branch("jtheta",jtheta,"jtheta[jnum]/D");
   T->Branch("jpt",jpt,"jpt[jnum]/D");
   T->Branch("jee",jee,"jee[jnum]/D");
+  T->Branch("dist",dist,"dist[jnum]/D");
 
-  //T->Branch("jjnum",&jjnum,"jjnum/I");
+  T->Branch("jjnum",&jjnum,"jjnum/I");
   //T->Branch("jjpx",jjpx,"jjpx[jjnum]/D");
  
   T->Branch("Asj",&Asj,"Asj/I");
@@ -154,7 +163,7 @@ int main() {
   // Begin event loop.
   for (int iEvent = 0; iEvent < nEvent; ++iEvent) {
     if (!pythia.next()) continue;
-  
+
  //...............................electrons.......................................................................
        
   for (int i=0; i < event.size(); ++i) {
@@ -185,21 +194,22 @@ int main() {
   }                                                                                 //for decay electron
  }                                                                                // condition for initial electron 
 }                                                                               //end of electron loop
-
-
     epx = event[d].px();
     epy = event[d].py();
     epz = event[d].pz();
     ee = event[d].e();
     ept = event[d].pT();
     etheta = event[d].theta();
-    ey = event[d].y();
 
-    if(ee<10) {continue;}
-    if(ey>0.95) {continue;}
+    eeta = event[d].eta();
+    ephi = event[d].phi();
 
-    //cout<< "ee  :" << ee << "  ey " << ey << endl;
-
+    ye = 1-ee*(1-cos(etheta))/(2*eElectron);
+    
+    if(ee<10) continue;
+    if(ye>0.95) continue;
+    if(etheta > 2.443) continue;
+    
 //--------------------------------------------------Hadrons--------------------------------------------------------------------------        
 
   //hadrons for fastjet
@@ -209,13 +219,13 @@ int main() {
     double mTemp;		              // for storing mass
     int y = 0;        
  
-  for (int l = 0; l < event.size(); ++l) {
-  if(event[l].isFinal() && l != d && event[l].isHadron()){        // taking final state particles  // d is the final state electron from initial electron beam
-  
-  hpx[y] = event[l].px();
-  hpy[y] = event[l].py();
-  hpz[y] = event[l].pz();
-  he[y] = event[l].e();
+   for (int l = 0; l < event.size(); ++l){
+   if(event[l].isFinal() && l != d){
+
+   hpx[y] = event[l].px();
+   hpy[y] = event[l].py();
+   hpz[y] = event[l].pz();
+   he[y] = event[l].e();
 
  // Create a PseudoJet from the complete Pythia particle.
       fastjet::PseudoJet particleTemp = event[l];    //All jets, as well as input particles to the clustering are PseudoJet objects
@@ -226,22 +236,25 @@ int main() {
       fjInputs.push_back( particleTemp);
       
   y++;
-   }                                                                 // only hadron loop
-  }                                                                 // all particle loop
+   }                                       // only hadron loop
+  }                                                             // all particle loop
  nb = y;
   
 //------------------------------------Jets--------------------------------------------------------------------
    
     // Run Fastjet anti-kT algorithm and sort jets in pT order.
     fastjet::ClusterSequence clustSeq1( fjInputs, jetDef );
-    vector <fastjet::PseudoJet> sortedJets = sorted_by_pt( clustSeq1.inclusive_jets(pTMin) );
-    
+
+    Selector jet_selector = SelectorEtMin(EtMin);
+    vector <fastjet::PseudoJet> sortedJets = sorted_by_pt( jet_selector(clustSeq1.inclusive_jets()) );
+
+    if(sortedJets.size()==0) continue;
     
    int z = 0;  
    //int f = 0;
    int c = 0;
 
-   for (unsigned int i = 0; i < sortedJets.size(); i++) {
+   for (unsigned int i = 0; i < sortedJets.size(); i++){
   
    jpx[z] = sortedJets[i].px();            // momentum and energy
    jpy[z] = sortedJets[i].py();
@@ -252,63 +265,59 @@ int main() {
    jtheta[z] = sortedJets[i].theta();
    jpt[z] = sortedJets[i].pt();
   
-   jee[z] = sortedJets[i].Et();          // returns the transerve energy
+   jee[z] = sortedJets[i].Et();            // returns the transerve energy
   
+   dist[z] = sqrt(pow((jeta[z]-eeta),2) + pow((jphi[z]-ephi),2));
+
+   if(dist[z]<1) break;
+
    z++;
    }
-   jnum = z;
 
-   //cout<< "*********************************************** Jets: "<< sortedJets.size()<<endl;
+   if(dist[z]<1) continue;
+
+   int a = 0;
+   for (unsigned int i = 0; i < sortedJets.size(); i++) {
+   if(jeta[i] > -1. && jeta[i] < 2. && jee[i]> 15.){
+    a++;
+    }
+   }
+   jjnum = a;
+
+   if(a == 0){
+     continue;
+   }
+   
    //_____________________________________________Subjets from All Jets____________________________________________________________________________________
-    
-   double ycut = 0.0005;          // ycut parameter for subjets
+   
+   for (unsigned int i = 0; i < sortedJets.size(); i++) {
 
-   for (unsigned int i = 0; i < sortedJets.size(); i++){
+   if(jeta[i] > -1. && jeta[i] < 2. && jee[i]> 15.){
 
-   if(jeta[i] > -1. && jeta[i] < 2. && jee[i]> 15.) {                           // conditions from zeus paper
-
-   //cout<<"line 260"<<endl;
-
-   for (unsigned int k = 0; k < sortedJets.size(); k++){
-
-   //cout<<"line 264 before"<<endl;
-
-   vector <fastjet::PseudoJet> constituents2 = sortedJets[k].constituents();
+   vector <fastjet::PseudoJet> constituents2 = sortedJets[i].constituents();
    fastjet::ClusterSequence clustSeq3( constituents2, jetDefCA );
    vector <fastjet::PseudoJet> exclusiveJets = clustSeq3.exclusive_jets_ycut(ycut);
    vector <fastjet::PseudoJet> AsubJets = sorted_by_pt(exclusiveJets);
 
-   //cout<<"subjets: "<< AsubJets.size() <<endl;
-
-   //jjpx[f] = sortedJets[i].px();                                   // storing just px,for now, of jets after above condition        
-   //f++;
-
-   
-
-  for(unsigned int j = 0; j < AsubJets.size(); j++){             //subjet loop
+   for(unsigned int j = 0; j < AsubJets.size(); j++){             //subjet loop
   
-  Asj_px[c] = AsubJets[j].px();            // momentum and energy
-  Asj_py[c] = AsubJets[j].py();
-  Asj_pz[c] = AsubJets[j].pz();
-  Asj_e[c] = AsubJets[j].e();
-  Asj_eta[c] = AsubJets[j].eta();          // returns the pseudo-rapidity
-  Asj_phi[c] = AsubJets[j].phi();          //returns the azimuthal angle in range 0 . . . 2π
-  Asj_theta[c] = AsubJets[j].theta(); 
-  Asj_pt[c] = AsubJets[j].pt();
-  //cout<<"line 286 subjets"<<endl;
-  c++;
-    }       // for loop subjet
-   }       // for loop jet
-     break;
-  }        //if condition           
- }         // for loop jet
-   
- //jnum = z;
+   Asj_px[c] = AsubJets[j].px();            // momentum and energy
+   Asj_py[c] = AsubJets[j].py();
+   Asj_pz[c] = AsubJets[j].pz();
+   Asj_e[c] = AsubJets[j].e();
+   Asj_eta[c] = AsubJets[j].eta();          // returns the pseudo-rapidity
+   Asj_phi[c] = AsubJets[j].phi();          //returns the azimuthal angle in range 0 . . . 2π
+   Asj_theta[c] = AsubJets[j].theta(); 
+   Asj_pt[c] = AsubJets[j].pt();
+
+   c++;
+     }       // for loop subjet  
+    }         // for loop jet
+   }
+ jnum = z;
  Asj = c;
- //jjnum = f;
 
     T->Fill(); 
-   //cout<<"end of event"<<endl;
  }    // End of event loop.
 
 
@@ -323,5 +332,5 @@ int main() {
   delete file;
 
   // Done.
-  return 0;
+  return 0; 
 }
