@@ -11,10 +11,6 @@
 #include <vector>
 #include "Pythia8Plugins/FastJet3.h"
 
-// FastJet include and namespace.
-//#include "fastjet/ClusterSequence.hh"
-// #include "fastjet/JadePlugin.hh"
-
 using namespace fastjet;
 
 using namespace Pythia8; 
@@ -23,13 +19,15 @@ int main() {
 
 // Beam energies, minimal Q2, number of events to generate
 
-  double eProton   = 820.;  // proton energy
-  double eElectron = 27.5;  // positron energy
-  double Q2min     = 125.;  // Q2 minimum
-  int    nEvent    = 100000;    // number of events
-  double R = 0.4;           // Jet radius
-
+  double eProton   = 820.;                            // proton energy
+  double eElectron = 27.5;                            // positron energy
+  double Q2min     = 125.;                            // Q2 minimum
+  int    nEvent    = 100000;                          // number of events
   double EtMin = 5.;
+  double R = 1.;                                     // Jet radius
+
+  TFile *file = TFile::Open("1.root","recreate");
+  double ycut = 0.1;
 
   // Generator.
   Pythia pythia;
@@ -71,19 +69,8 @@ int main() {
 
   JetDefinition jet_def( kt_algorithm, R,E_scheme);
 
-  //JetDefinition jetDef( kt_algorithm,E_scheme, Best);
-
-  //fastjet::JetDefinition jetDef(kt_algorithm,E_scheme, Best);
-  //fastjet::JetDefinition jetDefCA(kt_algorithm,E_scheme, Best);
-  
-  //fastjet::JetDefinition jetDef(kt_algorithm,R,E_scheme,Best);          // for jets : kt_algorithm
-  
-  //fastjet::JetDefinition jetDef(kt_algorithm,R,RecombinationScheme rec_sch = E_scheme); 
-
   std::vector <fastjet::PseudoJet> fjInputs;
 
-  //fastjet::JetDefinition jetDefCA(kt_algorithm,R,E_scheme,Best);     // for subjets : kt_algorithm
-  
 //--------------------- Variables -------------------------------------------------------------
   
  Double_t hpx[500],hpy[500],hpz[500],he[500];
@@ -98,11 +85,12 @@ int main() {
 
  Int_t nb, jnum, jjnum, Asj;
 //----------------------------------------------------------------------------------------------
-   
+
   // Set up the ROOT TFile and TTree.
-  TFile *file = TFile::Open("0005.root","recreate");
+
+  //TFile *file = TFile::Open("008mymain08.root","recreate");
   
-  double ycut = 0.0005;
+  //double ycut = 0.0005;
 
   TTree *T = new TTree("Tree","ev1 Tree");
   
@@ -205,9 +193,9 @@ int main() {
     int y = 0;        
  
    for (int l = 0; l < event.size(); ++l){
-   if(event[l].isFinal() && l != d && event[l].isHadron()){
-   //if(event[l].isFinal() && l != d){
-
+   //if(event[l].isFinal() && l != d && event[l].isHadron()){
+   if(event[l].isFinal() && l != d){
+   
    hpx[y] = event[l].px();
    hpy[y] = event[l].py();
    hpz[y] = event[l].pz();
@@ -238,7 +226,7 @@ int main() {
     vector <fastjet::PseudoJet> inclusive_jets = sorted_by_pt( jet_selector(clustSeq1.inclusive_jets()) );
   
    if(inclusive_jets.size()==0) continue;
-    
+   
    int z = 0;  
    int c = 0;
    int a = 0;
